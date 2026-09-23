@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dream-rsi-worker
+  namespace: dream-rsi
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: dream-rsi-worker}}
+  template:
+    metadata: {labels: {app: dream-rsi-worker}}
+    spec:
+      serviceAccountName: dream-rsi
+      securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: worker
+          image: dream-rsi:3.3.1
+          command: [dream-rsi-worker]
+          envFrom:
+            - configMapRef: {name: dream-rsi-config}
+            - secretRef: {name: dream-rsi-secrets}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          resources: {requests: {cpu: 250m, memory: 512Mi}, limits: {cpu: "2", memory: 2Gi}}

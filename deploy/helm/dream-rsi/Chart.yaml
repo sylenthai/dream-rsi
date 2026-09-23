@@ -1,0 +1,6 @@
+apiVersion: v2
+name: dream-rsi
+description: Dream-RSI production service
+type: application
+version: 3.3.1
+appVersion: "3.3.1"

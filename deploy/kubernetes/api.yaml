@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dream-rsi-api
+  namespace: dream-rsi
+spec:
+  replicas: 2
+  strategy: {type: RollingUpdate}
+  selector: {matchLabels: {app: dream-rsi-api}}
+  template:
+    metadata: {labels: {app: dream-rsi-api}}
+    spec:
+      serviceAccountName: dream-rsi
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: api
+          image: dream-rsi:3.3.1
+          ports: [{containerPort: 8000}]
+          envFrom:
+            - configMapRef: {name: dream-rsi-config}
+            - secretRef: {name: dream-rsi-secrets}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: 1, memory: 1Gi}
+          readinessProbe: {httpGet: {path: /readyz, port: 8000}, initialDelaySeconds: 5, periodSeconds: 10}
+          livenessProbe: {httpGet: {path: /healthz, port: 8000}, initialDelaySeconds: 10, periodSeconds: 15}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dream-rsi-api
+  namespace: dream-rsi
+spec:
+  selector: {app: dream-rsi-api}
+  ports: [{port: 80, targetPort: 8000}]

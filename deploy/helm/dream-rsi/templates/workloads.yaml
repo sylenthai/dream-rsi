@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: {{ include "dream-rsi.fullname" . }}-api}
+spec:
+  replicas: {{ .Values.api.replicas }}
+  selector: {matchLabels: {app: {{ include "dream-rsi.fullname" . }}-api}}
+  template:
+    metadata: {labels: {app: {{ include "dream-rsi.fullname" . }}-api}}
+    spec:
+      containers:
+        - name: api
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          ports: [{containerPort: 8000}]
+          env:
+            - {name: DREAM_RSI_ENV, value: production}
+            - {name: DREAM_RSI_REDIS_URL, value: "{{ .Values.config.redisUrl }}"}
+            - {name: DREAM_RSI_API_KEY, valueFrom: {secretKeyRef: {name: {{ include "dream-rsi.fullname" . }}-secrets, key: apiKey}}}
+            - {name: DREAM_RSI_POSTGRES_DSN, valueFrom: {secretKeyRef: {name: {{ include "dream-rsi.fullname" . }}-secrets, key: postgresDsn}}}
+          readinessProbe: {httpGet: {path: /readyz, port: 8000}}
+          livenessProbe: {httpGet: {path: /healthz, port: 8000}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          resources: {{- toYaml .Values.resources.api | nindent 12}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: {{ include "dream-rsi.fullname" . }}-worker}
+spec:
+  replicas: {{ .Values.worker.replicas }}
+  selector: {matchLabels: {app: {{ include "dream-rsi.fullname" . }}-worker}}
+  template:
+    metadata: {labels: {app: {{ include "dream-rsi.fullname" . }}-worker}}
+    spec:
+      containers:
+        - name: worker
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          command: [dream-rsi-worker]
+          env:
+            - {name: DREAM_RSI_ENV, value: production}
+            - {name: DREAM_RSI_REDIS_URL, value: "{{ .Values.config.redisUrl }}"}
+            - {name: DREAM_RSI_API_KEY, valueFrom: {secretKeyRef: {name: {{ include "dream-rsi.fullname" . }}-secrets, key: apiKey}}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          resources: {{- toYaml .Values.resources.worker | nindent 12}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: {{ include "dream-rsi.fullname" . }}-api}
+spec:
+  selector: {app: {{ include "dream-rsi.fullname" . }}-api}
+  ports: [{port: 80, targetPort: 8000}]
+---
+apiVersion: v1
+kind: Secret
+metadata: {name: {{ include "dream-rsi.fullname" . }}-secrets}
+type: Opaque
+stringData:
+  apiKey: "{{ .Values.secret.apiKey }}"
+  postgresDsn: "{{ .Values.secret.postgresDsn }}"

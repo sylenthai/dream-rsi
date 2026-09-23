@@ -1,0 +1,8 @@
+image: {repository: dream-rsi, tag: "3.3.1", pullPolicy: IfNotPresent}
+api: {replicas: 2}
+worker: {replicas: 2}
+resources:
+  api: {requests: {cpu: 100m, memory: 256Mi}, limits: {cpu: "1", memory: 1Gi}}
+  worker: {requests: {cpu: 250m, memory: 512Mi}, limits: {cpu: "2", memory: 2Gi}}
+config: {redisUrl: redis://redis:6379/0}
+secret: {apiKey: change-me, postgresDsn: postgresql://dream_rsi:change-me@postgres:5432/dream_rsi}

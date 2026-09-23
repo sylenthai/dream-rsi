@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dream-rsi"
+version = "3.3.1"
+description = "Research-grade replay-based recursive exploration-policy improvement framework"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+api = ["fastapi>=0.115", "uvicorn[standard]>=0.30"]
+database = ["psycopg[binary]>=3.2"]
+queue = ["redis>=5.0"]
+observability = ["opentelemetry-api>=1.25", "opentelemetry-sdk>=1.25"]
+dev = ["pytest>=8"]
+
+[project.scripts]
+dream-rsi = "dream_rsi.cli.research:main"
+dream-rsi-experiment = "dream_rsi.cli.experiment:main"
+dream-rsi-llm-coding = "dream_rsi.cli.llm_coding:main"
+dream-rsi-real-experiment = "dream_rsi.cli.real_experiment:main"
+dream-rsi-autonomous = "dream_rsi.cli.autonomous:main"
+dream-rsi-repair = "dream_rsi.cli.repair:main"
+dream-rsi-worker = "dream_rsi.cli.worker:main"
+dream-rsi-research-matrix = "dream_rsi.cli.research_matrix:main"
+dream-rsi-meta = "dream_rsi.cli.meta_rsi:main"
+dream-rsi-evolve = "dream_rsi.cli.evolve:main"
+
+[tool.setuptools.packages.find]
+include = ["dream_rsi*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
