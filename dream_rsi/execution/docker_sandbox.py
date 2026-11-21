@@ -43,7 +43,10 @@ class DockerSandbox:
             return DockerExecutionResult(-127, "", "docker executable not found", 0.0, available=False)
         with tempfile.TemporaryDirectory(prefix="dream-rsi-docker-") as tmp:
             workdir = Path(tmp)
-            (workdir / "solution.py").write_text(code, encoding="utf-8")
+            workdir.chmod(0o755)
+            sol = workdir / "solution.py"
+            sol.write_text(code, encoding="utf-8")
+            sol.chmod(0o644)
             network = "default" if self.policy.network else "none"
             cmd = ["docker", "run", "--rm", "--network", network]
             if self.policy.read_only_root: cmd += ["--read-only"]
