@@ -38,6 +38,7 @@ spec:
             - {name: DREAM_RSI_ENV, value: production}
             - {name: DREAM_RSI_REDIS_URL, value: "{{ .Values.config.redisUrl }}"}
             - {name: DREAM_RSI_API_KEY, valueFrom: {secretKeyRef: {name: {{ include "dream-rsi.fullname" . }}-secrets, key: apiKey}}}
+            - {name: DREAM_RSI_POSTGRES_DSN, valueFrom: {secretKeyRef: {name: {{ include "dream-rsi.fullname" . }}-secrets, key: postgresDsn}}}
           securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
           resources: {{- toYaml .Values.resources.worker | nindent 12}}
 ---

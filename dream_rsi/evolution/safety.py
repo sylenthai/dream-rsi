@@ -19,6 +19,13 @@ class SafetyConfig:
         "pyproject.toml",
         "RELEASE.md",
         "dream_rsi/execution/policy.py",
+        "dream_rsi/execution/docker_sandbox.py",
+        "dream_rsi/execution/python_sandbox.py",
+        "dream_rsi/execution/secure.py",
+        "dream_rsi/security/subprocess.py",
+        "dream_rsi/evolution/safety.py",
+        "dream_rsi/evolution/engine.py",
+        "dream_rsi/policies/registry.py",
     )
 
 
@@ -30,10 +37,19 @@ class SafetyGatekeeper:
 
     def inspect_patch(self, file_path: str, new_content: str) -> None:
         """Inspect a proposed file patch for safety violations."""
-        normalized_path = file_path.replace("\\", "/").strip("/")
+        raw_replaced = file_path.replace("\\", "/").strip()
+        parts = [p for p in raw_replaced.split("/") if p]
+        if not raw_replaced or raw_replaced.startswith("/") or ":" in raw_replaced or ".." in parts:
+            raise SafetyViolation(f"Invalid or path-traversal target '{file_path}' is strictly prohibited.")
+        normalized_path = "/".join(parts)
 
         # Check protected files
-        if any(normalized_path.endswith(prot) for prot in self.config.protected_files):
+        if any(
+            normalized_path == prot
+            or normalized_path.endswith("/" + prot)
+            or normalized_path.endswith(prot)
+            for prot in self.config.protected_files
+        ):
             raise SafetyViolation(f"Modification of protected infrastructure file is denied: {file_path}")
 
         # Check patch size
@@ -51,17 +67,20 @@ class SafetyGatekeeper:
 
         # Security AST rules
         for node in ast.walk(tree):
-            # Check forbidden imports
+            # Check forbidden imports (exact match or root package)
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    if alias.name in self.config.forbidden_modules:
+                    root_mod = alias.name.split(".")[0]
+                    if alias.name in self.config.forbidden_modules or root_mod in self.config.forbidden_modules:
                         raise SafetyViolation(f"Forbidden module import detected: {alias.name}")
             elif isinstance(node, ast.ImportFrom):
-                if node.module and node.module in self.config.forbidden_modules:
-                    raise SafetyViolation(f"Forbidden module import detected: {node.module}")
+                if node.module:
+                    root_mod = node.module.split(".")[0]
+                    if node.module in self.config.forbidden_modules or root_mod in self.config.forbidden_modules:
+                        raise SafetyViolation(f"Forbidden module import detected: {node.module}")
 
-            # Check unauthorized eval / exec calls
+            # Check unauthorized eval / exec / compile / __import__ calls
             if not self.config.allow_eval:
                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-                    if node.func.id in {"eval"} and not normalized_path.endswith("policies/llm_developer.py"):
+                    if node.func.id in {"eval", "exec", "compile", "__import__"} and not normalized_path.endswith("policies/llm_developer.py"):
                         raise SafetyViolation(f"Direct call to forbidden built-in '{node.func.id}' in {file_path}")

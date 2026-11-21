@@ -47,15 +47,30 @@ class RepositoryRunner:
         src=Path(repository).resolve()
         if not src.exists(): raise FileNotFoundError(src)
         with tempfile.TemporaryDirectory(prefix='dream-rsi-repo-') as td:
-            root=Path(td)/'repo'; shutil.copytree(src,root,ignore=shutil.ignore_patterns('.git','__pycache__'))
-            changed=tuple(apply_patchset(root,patchset)) if patchset else ()
-            mode='local-fallback'; start=time.perf_counter()
+            td_path = Path(td)
+            td_path.chmod(0o755)
+            root = td_path / 'repo'
+            shutil.copytree(src, root, ignore=shutil.ignore_patterns('.git', '__pycache__'))
+            changed = tuple(apply_patchset(root, patchset)) if patchset else ()
+            mode = 'local-fallback'; start = time.perf_counter()
             executed_docker = False
             if self.prefer_docker and self.docker.available:
+                # Ensure unprivileged (--cap-drop ALL) container users can traverse, read, and write in /workspace.
+                root.chmod(0o777)
+                for item in root.rglob('*'):
+                    try:
+                        if item.is_dir():
+                            item.chmod(0o777)
+                        elif os.access(item, os.X_OK):
+                            item.chmod(0o775)
+                        else:
+                            item.chmod(0o666)
+                    except OSError:
+                        pass
                 # Mount repo read-write only inside the ephemeral container. Command is explicit and task-controlled.
                 cmd=['docker','run','--rm','--network','none','--cap-drop','ALL','--security-opt','no-new-privileges',
                      '--pids-limit','128','--memory','512m','--cpus','1.0','--tmpfs','/tmp:rw,noexec,nosuid,size=64m',
-                     '--mount',f'type=bind,src={root},dst=/workspace,rw',self.docker.image,*command]
+                     '--mount',f'type=bind,src={root},dst=/workspace,rw','-w','/workspace',self.docker.image,*command]
                 try:
                     p=subprocess.run(cmd,capture_output=True,text=True,timeout=self.timeout_s)
                     rc,out,err,timed=p.returncode,p.stdout[-10000:],p.stderr[-10000:],False

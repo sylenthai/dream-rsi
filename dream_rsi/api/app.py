@@ -1,4 +1,5 @@
 from __future__ import annotations
+import hmac
 import os
 from typing import Any
 from fastapi import FastAPI, HTTPException, Header, Request, Response
@@ -23,13 +24,18 @@ class ExperimentResponse(BaseModel):
     error: str | None = None
 
 def create_app(service: ExperimentService | None = None) -> FastAPI:
-    if service is None:
-        dsn=os.getenv("DREAM_RSI_POSTGRES_DSN")
-        store=PostgresRunStore(dsn) if dsn else RunStore(os.getenv("DREAM_RSI_DB", "runs/dream_rsi.sqlite3"))
-        redis_url=os.getenv("DREAM_RSI_REDIS_URL")
-        q=RedisJobQueue(redis_url) if redis_url else InMemoryJobQueue()
-        service=ExperimentService(store, q)
-    svc = service
+    _service: ExperimentService | None = service
+
+    def get_service() -> ExperimentService:
+        nonlocal _service
+        if _service is None:
+            dsn = os.getenv("DREAM_RSI_POSTGRES_DSN")
+            store = PostgresRunStore(dsn) if dsn else RunStore(os.getenv("DREAM_RSI_DB", "runs/dream_rsi.sqlite3"))
+            redis_url = os.getenv("DREAM_RSI_REDIS_URL")
+            q = RedisJobQueue(redis_url) if redis_url else InMemoryJobQueue()
+            _service = ExperimentService(store, q)
+        return _service
+
     app = FastAPI(title="Dream-RSI API", version=__version__)
     api_key = os.getenv("DREAM_RSI_API_KEY")
     production = os.getenv("DREAM_RSI_ENV", "development").lower() == "production"
@@ -41,7 +47,8 @@ def create_app(service: ExperimentService | None = None) -> FastAPI:
         if not api_key:
             if production: raise HTTPException(503, "API authentication is not configured")
             return
-        if token != api_key: raise HTTPException(401, "invalid API key")
+        if not token or not hmac.compare_digest(token.encode("utf-8"), api_key.encode("utf-8")):
+            raise HTTPException(401, "invalid API key")
 
     @app.get("/metrics")
     def metrics(x_api_key: str | None = Header(default=None), authorization: str | None = Header(default=None)):
@@ -56,6 +63,7 @@ def create_app(service: ExperimentService | None = None) -> FastAPI:
 
     @app.get("/readyz")
     def readyz():
+        svc = get_service()
         checks: dict[str, str] = {}
         try:
             healthcheck = getattr(svc.store, "healthcheck", None)
@@ -81,12 +89,14 @@ def create_app(service: ExperimentService | None = None) -> FastAPI:
     @app.post("/v1/experiments", response_model=ExperimentResponse, status_code=202)
     def submit(req: ExperimentRequest, x_api_key: str | None = Header(default=None), authorization: str | None = Header(default=None), idempotency_key: str | None = Header(default=None, alias="Idempotency-Key")):
         auth(x_api_key, authorization)
+        svc = get_service()
         r=svc.submit(req.task, req.config, idempotency_key)
         return ExperimentResponse(id=r.id, task=r.task, status=r.status, attempts=r.attempts, created_at=r.created_at, result=r.result, error=r.error)
 
     @app.post("/v1/experiments/{run_id}/cancel", response_model=ExperimentResponse)
     def cancel(run_id: str, x_api_key: str | None = Header(default=None), authorization: str | None = Header(default=None)):
         auth(x_api_key, authorization)
+        svc = get_service()
         r = svc.get(run_id)
         if r is None: raise HTTPException(404, "experiment not found")
         if r.status in {"succeeded", "failed", "dead_letter", "cancelled"}: return ExperimentResponse(id=r.id, task=r.task, status=r.status, attempts=r.attempts, created_at=r.created_at, result=r.result, error=r.error)
@@ -96,7 +106,9 @@ def create_app(service: ExperimentService | None = None) -> FastAPI:
 
     @app.get("/v1/experiments/{run_id}", response_model=ExperimentResponse)
     def status(run_id: str, x_api_key: str | None = Header(default=None), authorization: str | None = Header(default=None)):
-        auth(x_api_key, authorization); r=svc.get(run_id)
+        auth(x_api_key, authorization)
+        svc = get_service()
+        r=svc.get(run_id)
         if r is None: raise HTTPException(404, "experiment not found")
         return ExperimentResponse(id=r.id, task=r.task, status=r.status, attempts=r.attempts, created_at=r.created_at, result=r.result, error=r.error)
     return app

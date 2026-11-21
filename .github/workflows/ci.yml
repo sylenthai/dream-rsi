@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    name: Pytest Suite (42 Tests), Bytecode & CLI Smoke
+    name: Pytest Suite (59 Tests), Bytecode & CLI Smoke
     runs-on: ubuntu-latest
 
     steps:

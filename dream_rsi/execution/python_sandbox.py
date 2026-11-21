@@ -1,6 +1,7 @@
 from __future__ import annotations
 import os
 import subprocess
+import sys
 import tempfile
 import time
 from dataclasses import dataclass
@@ -28,11 +29,23 @@ class PythonSandbox:
             path = os.path.join(workdir, "solution.py")
             with open(path, "w", encoding="utf-8") as f:
                 f.write(code)
-            cmd = ["python", "solution.py", *(args or [])]
+            cmd = [sys.executable, "-I", "solution.py", *(args or [])]
+            safe_env = {
+                "PATH": os.environ.get("PATH", ""),
+                "PYTHONNOUSERSITE": "1",
+                "PYTHONDONTWRITEBYTECODE": "1",
+            }
             start = time.perf_counter()
             try:
-                p = subprocess.run(cmd, cwd=workdir, input=stdin, capture_output=True,
-                                    text=True, timeout=self.timeout_s)
+                p = subprocess.run(
+                    cmd,
+                    cwd=workdir,
+                    env=safe_env,
+                    input=stdin,
+                    capture_output=True,
+                    text=True,
+                    timeout=self.timeout_s,
+                )
                 timed_out = False
             except subprocess.TimeoutExpired as exc:
                 return ExecutionResult(-1, (exc.stdout or "")[-self.max_output_chars:],

@@ -24,13 +24,15 @@ class RunStore:
         CREATE TABLE IF NOT EXISTS worker_heartbeats(worker_id TEXT PRIMARY KEY, heartbeat REAL NOT NULL);
         """); self.conn.commit()
     def healthcheck(self):
-        self.conn.execute("SELECT 1").fetchone()
+        with self._lock:
+            self.conn.execute("SELECT 1").fetchone()
 
     def create_run(self,run_id,task,config):
         now=datetime.now(timezone.utc).isoformat()
         with self._lock: self.conn.execute("INSERT INTO runs(id,created_at,task,config,status,attempts,updated_at) VALUES(?,?,?,?,?,?,?)",(run_id,now,task,json.dumps(config),"queued",0,now)); self.conn.commit()
     def get_run(self,run_id):
-        row=self.conn.execute("SELECT id,task,config,status,attempts,result,error,created_at,updated_at FROM runs WHERE id=?",(run_id,)).fetchone()
+        with self._lock:
+            row=self.conn.execute("SELECT id,task,config,status,attempts,result,error,created_at,updated_at FROM runs WHERE id=?",(run_id,)).fetchone()
         if not row:return None
         vals=list(row); vals[2]=json.loads(vals[2]); vals[5]=json.loads(vals[5]) if vals[5] else None
         return dict(zip(("id","task","config","status","attempts","result","error","created_at","updated_at"),vals))
@@ -65,5 +67,8 @@ class RunStore:
     def heartbeat_worker(self,worker_id,heartbeat):
         with self._lock:self.conn.execute("INSERT OR REPLACE INTO worker_heartbeats(worker_id,heartbeat) VALUES(?,?)",(worker_id,heartbeat));self.conn.commit()
     def stale_runs(self,cutoff):
-        return [r[0] for r in self.conn.execute("SELECT id FROM runs WHERE status='running' AND updated_at < ?",(datetime.fromtimestamp(cutoff,timezone.utc).isoformat(),))]
-    def close(self):self.conn.close()
+        with self._lock:
+            return [r[0] for r in self.conn.execute("SELECT id FROM runs WHERE status='running' AND updated_at < ?",(datetime.fromtimestamp(cutoff,timezone.utc).isoformat(),))]
+    def close(self):
+        with self._lock:
+            self.conn.close()

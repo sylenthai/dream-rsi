@@ -3,7 +3,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY dream_rsi ./dream_rsi
-RUN pip install --no-cache-dir '.[api]'
+RUN pip install --no-cache-dir '.[api,database,queue,observability]'
 RUN useradd --create-home --uid 10001 appuser && chown -R appuser:appuser /app
 USER appuser
 EXPOSE 8000

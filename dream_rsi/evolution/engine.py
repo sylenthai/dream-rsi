@@ -71,6 +71,14 @@ class AutonomousEvolutionEngine:
         self.architect = SelfArchitectAgent(self.llm)
         self.history: list[EvolutionCycleReport] = []
 
+    @staticmethod
+    def _resolve_within(root: Path, relative_path: str) -> Path:
+        root_resolved = root.resolve()
+        target = (root_resolved / relative_path).resolve()
+        if target == root_resolved or root_resolved not in target.parents:
+            raise ValueError(f"Refusing to write outside repository root: {relative_path}")
+        return target
+
     def _verify_in_staging(self, proposal: EvolutionProposal) -> tuple[bool, str | None]:
         """Clone repository into an isolated staging sandbox, apply patch, and run test suite."""
         with tempfile.TemporaryDirectory(prefix="dream-rsi-evolution-staging-") as staging_dir:
@@ -81,7 +89,7 @@ class AutonomousEvolutionEngine:
                 staging_path / "repo",
                 ignore=shutil.ignore_patterns(".git", "__pycache__", ".pytest_cache", "runs", "artifacts"),
             )
-            target = staging_path / "repo" / proposal.target_file
+            target = self._resolve_within(staging_path / "repo", proposal.target_file)
             if not target.parent.exists():
                 target.parent.mkdir(parents=True, exist_ok=True)
 
@@ -175,7 +183,7 @@ class AutonomousEvolutionEngine:
         # 5. Atomic Promotion
         applied = False
         if tests_passed and self.auto_apply:
-            real_target = self.repo_root / proposal.target_file
+            real_target = self._resolve_within(self.repo_root, proposal.target_file)
             real_target.parent.mkdir(parents=True, exist_ok=True)
             real_target.write_text(proposal.new_content, encoding="utf-8")
             applied = True

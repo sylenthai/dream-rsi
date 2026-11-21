@@ -95,3 +95,41 @@ class GeminiClient:
             text = ''.join(p.get('text', '') for p in parts)
         usage = data.get('usageMetadata', {}) or {}
         return LLMResponse(text, self.model, usage.get('promptTokenCount'), usage.get('candidatesTokenCount'), data)
+
+
+class AnthropicClient:
+    def __init__(self, model: str = 'claude-3-5-sonnet-latest', api_key: str | None = None,
+                 base_url: str = 'https://api.anthropic.com', timeout: float = 180.0, retries: int = 2):
+        self.model = model
+        self.api_key = api_key or os.getenv('ANTHROPIC_API_KEY')
+        if not self.api_key:
+            raise LLMError('ANTHROPIC_API_KEY is not set')
+        self.base_url, self.timeout, self.retries = base_url.rstrip('/'), timeout, retries
+
+    def generate(self, messages, *, temperature=0.2, max_tokens=2048, response_format=None):
+        system_parts = [m['content'] for m in messages if m.get('role') == 'system']
+        chat_messages = [
+            {'role': 'assistant' if m.get('role') == 'assistant' else 'user', 'content': m['content']}
+            for m in messages
+            if m.get('role') != 'system'
+        ]
+        if not chat_messages:
+            chat_messages = [{'role': 'user', 'content': '\n\n'.join(system_parts)}]
+            system_parts = []
+        payload: dict[str, Any] = {
+            'model': self.model,
+            'max_tokens': max_tokens,
+            'temperature': temperature,
+            'messages': chat_messages,
+        }
+        if system_parts:
+            payload['system'] = '\n\n'.join(system_parts)
+        headers = {
+            'x-api-key': self.api_key,
+            'anthropic-version': '2023-06-01',
+        }
+        data = _post(f'{self.base_url}/v1/messages', payload, headers, self.timeout, self.retries)
+        blocks = data.get('content', [])
+        text = ''.join(b.get('text', '') for b in blocks if isinstance(b, dict) and b.get('type') == 'text')
+        usage = data.get('usage', {}) or {}
+        return LLMResponse(text, self.model, usage.get('input_tokens'), usage.get('output_tokens'), data)

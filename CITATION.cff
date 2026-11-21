@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use Dream-RSI in your research or engineering benchmarks, please cite this software using the metadata below."
+title: "Dream-RSI: Replay-Based Recursive Exploration-Policy Improvement & Self-Evolution Framework"
+type: software
+authors:
+  - name: "sylenthai"
+repository-code: "https://github.com/sylenthai/dream-rsi"
+url: "https://github.com/sylenthai/dream-rsi"
+license: Apache-2.0
+version: "3.3.1"
+keywords:
+  - recursive-self-improvement
+  - discovery-tree
+  - coding-agents
+  - llm-evaluation
+  - sandboxed-execution
+  - meta-learning
