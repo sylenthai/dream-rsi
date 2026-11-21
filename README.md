@@ -1,6 +1,24 @@
 # Dream-RSI 3.3.1
 
+[![CI & Regression Suite](https://github.com/sylenthai/dream-rsi/actions/workflows/ci.yml/badge.svg)](https://github.com/sylenthai/dream-rsi/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/badge/Release-v3.3.1-blue.svg)](https://github.com/sylenthai/dream-rsi/releases)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB.svg)](https://www.python.org/)
+[![Tests](https://img.shields.io/badge/Tests-42_Passing-brightgreen.svg)](./RELEASE.md)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
+
 Dream-RSI is a bounded research platform for replay-based recursive exploration-policy improvement, autonomous experiment planning, coding-task evaluation, repository repair, persistent research memory, and reproducible multi-model experiments.
+
+## Architecture Overview
+
+```mermaid
+flowchart LR
+    A["Discovery Tree & Replay Memory"] --> B["Structured LLM Policy Planner"]
+    B --> C["Sandboxed Execution (Docker / RPC Boundary)"]
+    C --> D["Independent Fresh-World Validation"]
+    D --> E["Paired Statistical Aggregation & Failure Diagnosis"]
+    E --> F["Bounded Strategy Mutation & Repo Repair"]
+    F --> A
+```
 
 ## What is included
 
