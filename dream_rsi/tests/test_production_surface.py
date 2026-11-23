@@ -1,6 +1,10 @@
 from pathlib import Path
-import tomllib
 import pytest
+
+try:  # Python 3.11+
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - Python 3.10 fallback
+    tomllib = pytest.importorskip("tomli", reason="tomllib/tomli unavailable on this interpreter")
 
 
 def test_release_manifest_is_clean():

@@ -35,6 +35,11 @@ class PythonSandbox:
                 "PYTHONNOUSERSITE": "1",
                 "PYTHONDONTWRITEBYTECODE": "1",
             }
+            # Python still needs the Windows system directories (SystemRoot) to seed its
+            # CSPRNG before hashing; no host credentials/secrets are propagated.
+            for name in ("SYSTEMROOT", "WINDIR", "TEMP", "TMP"):
+                if os.environ.get(name):
+                    safe_env[name] = os.environ[name]
             start = time.perf_counter()
             try:
                 p = subprocess.run(

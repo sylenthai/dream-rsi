@@ -1,5 +1,9 @@
 from pathlib import Path
-import tomllib
+
+try:  # Python 3.11+
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - Python 3.10 fallback
+    import tomli as tomllib
 
 # Local tooling directories that must never influence release integrity checks.
 EXCLUDED_DIRS = {".git", ".venv", "venv", "env", "build", "dist", "runs", "artifacts", "node_modules", "__pycache__", ".pytest_cache"}
