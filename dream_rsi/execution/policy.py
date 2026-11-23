@@ -18,7 +18,7 @@ class ExecutionPolicy:
 
     @classmethod
     def from_env(cls) -> "ExecutionPolicy":
-        return cls(
+        policy = cls(
             network=os.getenv("DREAM_RSI_EXEC_NETWORK", "none").lower() in {"1", "true", "yes"},
             read_only_root=os.getenv("DREAM_RSI_EXEC_READONLY", "1").lower() not in {"0", "false", "no"},
             memory=os.getenv("DREAM_RSI_EXEC_MEMORY", cls.memory),
@@ -28,6 +28,9 @@ class ExecutionPolicy:
             timeout_s=float(os.getenv("DREAM_RSI_EXEC_TIMEOUT", cls.timeout_s)),
             max_output_chars=int(os.getenv("DREAM_RSI_EXEC_MAX_OUTPUT", cls.max_output_chars)),
         )
+        # Environment overrides must satisfy the same invariants as explicit constructor values.
+        policy.validate()
+        return policy
 
     def validate(self) -> None:
         if self.pids_limit < 1 or self.pids_limit > 4096:

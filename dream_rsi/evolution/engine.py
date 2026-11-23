@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -17,6 +18,9 @@ from ..research.memory import ResearchMemoryStore
 from .architect import EvolutionProposal, SelfArchitectAgent
 from .introspector import CodebaseIntrospector, CodebaseMap
 from .safety import SafetyGatekeeper, SafetyViolation
+
+# Credentials must never reach the staged verification subprocess.
+_SECRET_ENV_RE = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|DSN)", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -51,6 +55,13 @@ class EvolutionReport:
 class AutonomousEvolutionEngine:
     """Supervised autonomous engine that inspects, designs, tests, and promotes code improvements."""
 
+    # Directories copied into staging (build/test caches and local virtualenvs are excluded).
+    STAGING_IGNORE_PATTERNS = (
+        ".git", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache",
+        "runs", "artifacts", "build", "dist", "node_modules",
+        ".venv", "venv", "env", "*.egg-info",
+    )
+
     def __init__(
         self,
         llm: LLMClient,
@@ -79,15 +90,19 @@ class AutonomousEvolutionEngine:
             raise ValueError(f"Refusing to write outside repository root: {relative_path}")
         return target
 
+    def _test_command(self) -> list[str]:
+        """Run the suite with the engine's own interpreter (no throwaway venv inside staging)."""
+        return [sys.executable, "-m", "pytest", "-q"]
+
     def _verify_in_staging(self, proposal: EvolutionProposal) -> tuple[bool, str | None]:
         """Clone repository into an isolated staging sandbox, apply patch, and run test suite."""
         with tempfile.TemporaryDirectory(prefix="dream-rsi-evolution-staging-") as staging_dir:
             staging_path = Path(staging_dir)
-            # Copy source code to staging, ignoring git caches and bytecode
+            # Copy source code to staging, ignoring git caches, bytecode and local virtualenvs
             shutil.copytree(
                 self.repo_root,
                 staging_path / "repo",
-                ignore=shutil.ignore_patterns(".git", "__pycache__", ".pytest_cache", "runs", "artifacts"),
+                ignore=shutil.ignore_patterns(*self.STAGING_IGNORE_PATTERNS),
             )
             target = self._resolve_within(staging_path / "repo", proposal.target_file)
             if not target.parent.exists():
@@ -95,14 +110,17 @@ class AutonomousEvolutionEngine:
 
             target.write_text(proposal.new_content, encoding="utf-8")
 
-            # Run test suite inside staging directory, ignoring nested evolution test to prevent recursive runs
-            env = dict(os.environ)
+            # Run the suite inside staging with an isolated interpreter: no user site-packages
+            # (PYTHONNOUSERSITE) and no inherited secrets from the host environment.
+            env = {k: v for k, v in os.environ.items() if not _SECRET_ENV_RE.search(k)}
             env["DREAM_RSI_IN_STAGING"] = "1"
-
-            if shutil.which("uv"):
-                cmd = ["uv", "run", "--with", "pytest", "pytest", "-q", "--ignore=dream_rsi/tests/test_evolution.py", "dream_rsi/tests"]
-            else:
-                cmd = [sys.executable, "-m", "pytest", "-q", "--ignore=dream_rsi/tests/test_evolution.py", "dream_rsi/tests"]
+            env["PYTHONDONTWRITEBYTECODE"] = "1"
+            env["PYTHONNOUSERSITE"] = "1"
+            cmd = [
+                *self._test_command(),
+                "--ignore=dream_rsi/tests/test_evolution.py",
+                "dream_rsi/tests",
+            ]
 
             try:
                 proc = subprocess.run(
@@ -111,7 +129,7 @@ class AutonomousEvolutionEngine:
                     capture_output=True,
                     text=True,
                     env=env,
-                    timeout=45,
+                    timeout=180,
                 )
                 if proc.returncode == 0:
                     return True, None

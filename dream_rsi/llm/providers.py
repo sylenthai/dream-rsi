@@ -8,6 +8,19 @@ from typing import Any
 from .client import LLMError, LLMResponse
 
 
+RETRYABLE_STATUS = {408, 409, 425, 429, 500, 502, 503, 504}
+
+
+def _retry_after(exc: urllib.error.HTTPError) -> float | None:
+    raw = exc.headers.get("Retry-After") if exc.headers is not None else None
+    if not raw:
+        return None
+    try:
+        return max(0.0, float(raw))
+    except (TypeError, ValueError):
+        return None
+
+
 def _post(url: str, payload: dict[str, Any], headers: dict[str, str], timeout: float, retries: int) -> dict[str, Any]:
     body = json.dumps(payload).encode('utf-8')
     last: Exception | None = None
@@ -17,6 +30,13 @@ def _post(url: str, payload: dict[str, Any], headers: dict[str, str], timeout: f
             with urllib.request.urlopen(req, timeout=timeout) as response:
                 raw = response.read().decode('utf-8')
                 return json.loads(raw)
+        except urllib.error.HTTPError as exc:
+            last = exc
+            # Transport-level failures only retry on transient status codes; auth/validation errors fail fast.
+            if exc.code not in RETRYABLE_STATUS or attempt >= retries:
+                break
+            delay = _retry_after(exc)
+            time.sleep(min(delay if delay is not None else 2 ** attempt, 30.0))
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
             last = exc
             if attempt < retries:
@@ -86,7 +106,7 @@ class GeminiClient:
         if response_format == 'json':
             payload['generationConfig']['responseMimeType'] = 'application/json'
         url = f'{self.base_url}/models/{self.model}:generateContent'
-        headers = {'x-goog-api-key': self.api_key}
+        headers = {'x-goog-api-key': str(self.api_key)}
         data = _post(url, payload, headers, self.timeout, self.retries)
         candidates = data.get('candidates', [])
         text = ''
@@ -125,7 +145,7 @@ class AnthropicClient:
         if system_parts:
             payload['system'] = '\n\n'.join(system_parts)
         headers = {
-            'x-api-key': self.api_key,
+            'x-api-key': str(self.api_key),
             'anthropic-version': '2023-06-01',
         }
         data = _post(f'{self.base_url}/v1/messages', payload, headers, self.timeout, self.retries)
