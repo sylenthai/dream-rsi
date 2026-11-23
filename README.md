@@ -7,7 +7,7 @@
 [![CI & Regression Suite](https://github.com/sylenthai/dream-rsi/actions/workflows/ci.yml/badge.svg)](https://github.com/sylenthai/dream-rsi/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/badge/Release-v3.3.1-blue.svg)](https://github.com/sylenthai/dream-rsi/releases)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB.svg)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/Tests-59_Passing-brightgreen.svg)](./dream_rsi/tests)
+[![Tests](https://img.shields.io/badge/Tests-60_Passing-brightgreen.svg)](./dream_rsi/tests)
 [![Security Policy](https://img.shields.io/badge/Security-Defense_in_Depth-orange.svg)](./SECURITY.md)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 
@@ -201,7 +201,7 @@ Kubernetes and Helm manifests (configured with `readOnlyRootFilesystem: true`, d
 ## Testing & Verification
 
 ```bash
-# Run full test suite (59 tests)
+# Run full test suite (60 tests, Python 3.10 and 3.12 in CI)
 python -m pytest -q
 
 # Compile all modules to bytecode
